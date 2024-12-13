@@ -10,7 +10,6 @@
       ></textarea>
     </div>
     <button @click="postComment" class="comment-button">Post</button>
-
     <div class="comment-list">
       <p class="comment-count">{{ currentComments.length }}件のコメント</p>
       <div v-for="(c, index) in currentComments" :key="c.id || index" class="comment">
@@ -72,7 +71,7 @@ const props = defineProps({
 
 const comment = ref('');
 const currentComments = ref([]);
-const baseURL = 'https://ibera.cps.akita-pu.ac.jp';
+const baseURL = 'http://127.0.0.1:8888';
 
 // 日時フォーマット関数（日本時間）
 const formatTimestamp = (isoString) => {
@@ -386,3 +385,4 @@ const adjustReplyHeight = (event) => {
   word-break: break-word;
 }
 </style>
+

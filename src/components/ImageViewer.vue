@@ -126,7 +126,7 @@ const goToPage = (index) => {
 // コメントをロードする関数
 const loadComments = async (pageId) => {
   try {
-    const response = await axios.get(`https://ibera.cps.akita-pu.ac.jp/comments`);
+    const response = await axios.get(`http://localhost:8888/comments`);
     // フィルタリングして現在のページのコメントを取得
     const pageComments = response.data.filter(c => c.pageId === pageId);
     currentComments.value = pageComments
