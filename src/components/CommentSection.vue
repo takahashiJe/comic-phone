@@ -3,7 +3,7 @@
     <div class="input-container">
       <textarea
         v-model="comment"
-        placeholder="いまどうしてる？"
+        placeholder="この漫画どう？"
         class="comment-input"
         rows="1"
         @input="adjustHeight"
@@ -12,7 +12,7 @@
     <button @click="postComment" class="comment-button">Post</button>
 
     <div class="comment-list">
-      <p>{{ currentComments.length }}件のコメント</p>
+      <p class="comment-count">{{ currentComments.length }}件のコメント</p>
       <div v-for="(c, index) in currentComments" :key="c.id || index" class="comment">
         <div class="comment-content">
           <div class="comment-header">
@@ -57,6 +57,7 @@
     </div>
   </div>
 </template>
+
 
 <script setup>
 import { ref, onMounted } from 'vue';
