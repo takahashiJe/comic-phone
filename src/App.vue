@@ -3,18 +3,26 @@
     <!-- ログインしていない場合はログインフォームを表示 -->
     <div v-if="!isLoggedIn" class="login-container">
       <h1>ログイン</h1>
-      <form @submit.prevent="login" class="login-form">
-        <div class="form-group">
-          <label for="username">ユーザー名</label>
-          <input 
-            type="text" 
-            id="username"
-            v-model="username"
-            required
-          >
+      <!-- フォームをユーザー選択に変更 -->
+      <div class="user-list">
+        <h2>ユーザーを選択してください</h2>
+        <div 
+          v-for="user in users" 
+          :key="user"
+          @click="selectUser(user)"
+          class="user-item"
+          :class="{ 'selected': username === user }"
+        >
+          {{ user }}
         </div>
-        <button type="submit" class="login-button">ログイン</button>
-      </form>
+      </div>
+      <button 
+        @click="login" 
+        class="login-button"
+        :disabled="!username"
+      >
+        ログイン
+      </button>
     </div>
 
     <!-- ログイン済みの場合はImageViewerを表示 -->
@@ -32,8 +40,30 @@ import ImageViewer from './components/ImageViewer.vue';
 import imageList from '@/assets/images.json';
 
 const pages = ref(imageList);  // 画像データのリスト
+const users = ref(
+  ['Riku', 
+  'Ohkawa', 
+  'Hamabe',
+  'YosidaKai',
+  'Hayato',
+  'Shoma',
+  'Junta',
+  'Takumi',
+  'Aoi',
+  'Arai',
+  'Ogawa',
+  'Yuto',
+  'Narita',
+  'Yamane',
+  '他のユーザー']
+); // ユーザーリスト
 const isLoggedIn = ref(false); // ログイン状態
 const username = ref('');
+
+// ユーザー選択処理
+const selectUser = (user) => {
+  username.value = user;
+};
 
 // ログイン処理
 const login = () => {
@@ -41,6 +71,7 @@ const login = () => {
   if (username.value) {
     isLoggedIn.value = true;
   }
+  localStorage.removeItem('all_comments');
 };
 </script>
 
@@ -91,6 +122,32 @@ const login = () => {
   font-size: 1rem;
 }
 
+.user-list {
+  margin: 1rem 0;
+}
+
+.user-item {
+  padding: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  margin: 0.5rem 0;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.user-item:hover {
+  background-color: #f0f0f0;
+}
+
+.user-item.selected {
+  background-color: #007BFF;
+  color: white;
+}
+
+.login-button:disabled {
+  background: #cccccc;
+  cursor: not-allowed;
+}
 .login-button {
   background: #007BFF;
   color: white;
