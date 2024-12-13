@@ -1,24 +1,33 @@
 <template>
   <div class="comment-section">
-    <textarea
-      v-model="comment"
-      placeholder="コメントする．．．"
-      class="comment-input"
-      rows="1"
-      @input="adjustHeight"
-    ></textarea>
-    <button @click="postComment" class="comment-button">コメント</button>
+    <div class="input-container">
+      <textarea
+        v-model="comment"
+        placeholder="いまどうしてる？"
+        class="comment-input"
+        rows="1"
+        @input="adjustHeight"
+      ></textarea>
+    </div>
+    <button @click="postComment" class="comment-button">Post</button>
+
     <div class="comment-list">
       <p>{{ currentComments.length }}件のコメント</p>
-      <div v-for="(c, index) in currentComments" :key="index" class="comment">
-        <p>{{ c.username }}:{{ c.text }} - ページ {{ c.pageId }}</p>
-        <div class="reply-section">
-          <button 
-            @click="toggleReplyForm(index)" 
-            class="reply-button"
-          >
-            返信する
-          </button>
+      <div v-for="(c, index) in currentComments" :key="c.id || index" class="comment">
+        <div class="comment-content">
+          <div class="comment-header">
+            <span class="comment-username">{{ c.username }}</span>
+            <span class="comment-userid">{{ c.userid }}</span>
+            <!-- タイムスタンプをTwitter風にユーザーIDの後ろに表示 -->
+            <span class="comment-timestamp">・{{ formatTimestamp(c.timestamp) }}</span>
+          </div>
+          <div class="comment-text">
+            {{ c.text }}
+          </div>
+          <div class="comment-actions">
+            <span class="reply-link" @click="toggleReplyForm(index)">返信</span>
+          </div>
+
           <div v-if="c.showReplyForm" class="reply-form">
             <textarea
               v-model="c.replyText"
@@ -27,13 +36,20 @@
               rows="1"
               @input="adjustReplyHeight"
             ></textarea>
-            <button @click="postReply(index)" class="reply-submit">送信</button>
+            <button @click="postReply(index)" class="reply-submit">Post</button>
           </div>
+
           <div v-if="c.replies && c.replies.length > 0" class="replies">
-            <div v-for="(reply, replyIndex) in c.replies" 
-                 :key="replyIndex" 
-                 class="reply">
-              <p>↳ {{ reply.username }}: {{ reply.text }}</p>
+            <div v-for="(reply, replyIndex) in c.replies" :key="replyIndex" class="reply">
+              <div class="reply-content">
+                <div class="reply-header">
+                  <span class="reply-username">{{ reply.username }}</span>
+                  <span class="reply-userid">{{ reply.userid }}</span>
+                  <!-- 返信にもタイムスタンプを表示 -->
+                  <span class="reply-timestamp">・{{ formatTimestamp(reply.timestamp) }}</span>
+                </div>
+                <div class="reply-text">{{ reply.text }}</div>
+              </div>
             </div>
           </div>
         </div>
@@ -43,15 +59,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted } from 'vue';
 import axios from "axios";
 
 const props = defineProps({
-  pageId: Number,
-  comments: {
-    type: Array,
-    default: () => []
-  },
   username: {
     type: String,
     default: '匿名ユーザー'
@@ -60,28 +71,43 @@ const props = defineProps({
 
 const comment = ref('');
 const currentComments = ref([]);
-
-// バックエンドのベースURL（適宜変更）
 const baseURL = 'https://ibera.cps.akita-pu.ac.jp';
 
-// コメント投稿
+// 日時フォーマット関数（日本時間）
+const formatTimestamp = (isoString) => {
+  const date = new Date(isoString);
+  const options = { 
+    year: 'numeric', 
+    month: '2-digit', 
+    day: '2-digit', 
+    hour: '2-digit', 
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'Asia/Tokyo'  // 日本時間に設定
+  };
+  return new Intl.DateTimeFormat('ja-JP', options).format(date).replace(/\//g, '/').replace(',', '');
+};
+
 const postComment = async () => {
   if (comment.value.trim()) {
     try {
-      // バックエンドへコメント投稿
       const payload = {
-        page: props.pageId, 
+        page: 1,  // 必要に応じて変更
         user: props.username, 
         user_comment: comment.value
       };
-      await axios.post(`${baseURL}/comments`, payload);
+      const response = await axios.post(`${baseURL}/comments`, payload);
       
-      // コメント入力欄をクリア
       comment.value = '';
       adjustHeight();
 
-      // 再読込
-      loadComments();
+      const newComment = {
+        ...response.data.comment,
+        showReplyForm: false,
+        replyText: ''
+      };
+      // 最新コメントを上に表示
+      currentComments.value.unshift(newComment);
     } catch (error) {
       console.error('コメント投稿エラー:', error);
       alert('コメントの投稿に失敗しました。もう一度お試しください。');
@@ -89,28 +115,23 @@ const postComment = async () => {
   }
 };
 
-// コメントデータをバックエンドから取得
 const loadComments = async () => {
   try {
-    const response = await axios.get(`${baseURL}/comments?page=${props.pageId}`);
-    currentComments.value = response.data.map(c => ({
-      ...c,
-      showReplyForm: c.showReplyForm ?? false,
-      replyText: c.replyText ?? ''
-    }));
+    const response = await axios.get(`${baseURL}/comments`);
+    currentComments.value = response.data
+      .map(c => ({
+        ...c,
+        showReplyForm: false,
+        replyText: ''
+      }))
+      .reverse();  // 最新を上に表示
   } catch (error) {
     console.error('コメント取得エラー:', error);
     alert('コメントの取得に失敗しました。');
   }
 };
 
-// ページマウント時にコメントを読み込む
 onMounted(() => {
-  loadComments();
-});
-
-// ページIDが変わったら再読み込み
-watch(() => props.pageId, () => {
   loadComments();
 });
 
@@ -130,15 +151,9 @@ const toggleReplyForm = (index) => {
 
 // 返信投稿
 const postReply = async (commentIndex) => {
-  console.log('postReply開始');
   const targetComment = currentComments.value[commentIndex];
   if (targetComment.replyText.trim()) {
     try {
-      // 返信対象コメントIDを特定する必要があります。
-      // ここではバックエンド側でコメントIDも返すようにするか、現在の実装でIDがないならバックエンドにIDを含めるよう修正が必要。
-      // 現在のバックエンド例ではコメントIDを返していないため、返すようにバックエンドを修正することを推奨します。
-      // ここでは、フロントで保持しているコメント配列に"id"を格納していると仮定:
-      // 例: backendから返す時に comment に id フィールドも付与するようにしておく
       if (!targetComment.id) {
         console.error("コメントIDが不明なため返信を投稿できません。");
         alert("コメントIDが不明です。バックエンドでIDを返すようにしてください。");
@@ -150,13 +165,17 @@ const postReply = async (commentIndex) => {
         reply_user: props.username,
         reply_user_comment: targetComment.replyText
       };
-      await axios.post(`${baseURL}/replies`, payload);
+      const response = await axios.post(`${baseURL}/replies`, payload);
 
-      // 成功したら返信フォームを閉じてコメント再読込
       targetComment.showReplyForm = false;
       targetComment.replyText = '';
-      loadComments();
-
+      // 新しい返信をコメント内に追加
+      const updatedComment = response.data.comment;
+      // 更新されたコメントを取得
+      const updatedIndex = currentComments.value.findIndex(c => c.id === updatedComment.id);
+      if (updatedIndex !== -1) {
+        currentComments.value.splice(updatedIndex, 1, updatedComment);
+      }
     } catch (error) {
       console.error('返信投稿エラー:', error);
       alert('返信の投稿に失敗しました。もう一度お試しください。');
@@ -175,77 +194,114 @@ const adjustReplyHeight = (event) => {
 <style scoped>
 .comment-section {
   margin-top: 20px;
-  text-align: left;
   width: 100%;
-  max-width: 800px;
+  max-width: 600px;
   margin: 20px auto;
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  color: #0f1419;
+}
+
+.input-container {
+  margin-bottom: 10px;
 }
 
 .comment-input {
   width: 100%;
-  padding: 10px;
-  margin-bottom: 10px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  padding: 12px;
+  border: none;
+  border-bottom: 1px solid #ccc;
   font-size: 16px;
   resize: none;
   overflow-y: hidden;
-  box-sizing: border-box;
+  font-family: inherit;
+  outline: none;
+}
+
+.comment-input::placeholder {
+  color: #657786;
 }
 
 .comment-button {
-  padding: 10px 20px;
-  background-color: #007BFF;
+  padding: 8px 16px;
+  background: #1DA1F2;
   color: white;
   border: none;
   border-radius: 20px;
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  font-weight: bold;
+  margin-bottom: 20px;
 }
-
 .comment-button:hover {
-  background-color: #0056b3;
+  background: #1480ba;
 }
 
 .comment-list {
-  max-height: 40vh;
-  overflow-y: auto;
-  margin-top: 20px;
-  padding: 10px;
-  border: 1px solid #eee;
-  border-radius: 4px;
+  border-top: 1px solid #eee;
+  padding-top: 10px;
 }
 
 .comment-list p {
   font-weight: bold;
-  margin-bottom: 10px;
+  font-size: 18px;
+  margin-bottom: 15px;
 }
 
 .comment {
-  margin-bottom: 15px;
-  padding: 10px;
-  background-color: #f8f9fa;
-  border-radius: 4px;
+  padding: 15px 0;
+  border-bottom: 1px solid #eee;
 }
 
-.comment p {
-  margin: 0;
-  line-height: 1.5;
+.comment:last-child {
+  border-bottom: none;
 }
 
-.reply-section {
-  margin-left: 20px;
-  margin-top: 10px;
+.comment-content {
+  margin-left: 0;
 }
 
-.reply-button {
-  font-size: 0.9em;
-  padding: 5px 10px;
-  background-color: #6c757d;
-  color: white;
-  border: none;
-  border-radius: 15px;
+.comment-header {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  color: #657786;
+  margin-bottom: 5px;
+}
+
+.comment-username {
+  font-weight: bold;
+  color: #0f1419;
+  margin-right: 5px;
+}
+
+.comment-userid {
+  margin-right: 5px;
+}
+
+.comment-timestamp {
+  margin-left: 5px;
+  color: #657786;
+  font-size: 13px;
+}
+
+.comment-text {
+  font-size: 16px;
+  color: #0f1419;
+  margin-bottom: 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.comment-actions {
+  font-size: 14px;
+  color: #657786;
+}
+
+.reply-link {
   cursor: pointer;
+  color: #657786;
+}
+.reply-link:hover {
+  text-decoration: underline;
 }
 
 .reply-form {
@@ -255,18 +311,77 @@ const adjustReplyHeight = (event) => {
 .reply-input {
   width: 100%;
   padding: 8px;
-  margin-bottom: 5px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  border: none;
+  border-bottom: 1px solid #ccc;
+  font-family: inherit;
   resize: none;
+  outline: none;
+  font-size: 14px;
+  margin-bottom: 5px;
+}
+
+.reply-input::placeholder {
+  color: #657786;
 }
 
 .reply-submit {
-  padding: 5px 15px;
-  background-color: #28a745;
-  color: white;
+  padding: 5px 10px;
+  background: #1DA1F2;
+  color: #fff;
   border: none;
   border-radius: 15px;
+  font-size: 14px;
+  font-weight: bold;
   cursor: pointer;
+}
+.reply-submit:hover {
+  background: #1480ba;
+}
+
+.replies {
+  margin-top: 10px;
+  border-left: 2px solid #e6ecf0;
+  padding-left: 10px;
+}
+
+.reply {
+  margin-bottom: 10px;
+}
+
+.reply-content {
+  font-size: 14px;
+  color: #0f1419;
+}
+
+.reply-header {
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  color: #657786;
+  margin-bottom: 3px;
+}
+
+.reply-username {
+  font-weight: bold;
+  color: #0f1419;
+  margin-right: 5px;
+}
+
+.reply-userid {
+  color: #657786;
+  margin-right: 5px;
+}
+
+.reply-timestamp {
+  margin-left: 5px;
+  color: #657786;
+  font-size: 12px;
+}
+
+.reply-text {
+  font-size: 14px;
+  color: #0f1419;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 </style>
