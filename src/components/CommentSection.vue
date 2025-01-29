@@ -1,22 +1,28 @@
 <template>
+  <div>
+    <button @click="toggleIsModified" class="toggle-button">
+      {{ isModified ? '修正ver' : '無修正ver' }}
+    </button>
+  </div>
   <div class="comment-section">
     <div class="input-container">
       <textarea
         v-model="comment"
-        placeholder="この漫画どう？"
+        placeholder="このシーンどう？"
         class="comment-input"
         rows="1"
         @input="adjustHeight"
       ></textarea>
     </div>
     <button @click="postComment" class="comment-button">Post</button>
+
     <div class="comment-list">
       <p class="comment-count">{{ currentComments.length }}件のコメント</p>
       <div v-for="(c, index) in currentComments" :key="c.id || index" class="comment">
         <div class="comment-content">
           <div class="comment-header">
             <span class="comment-username">{{ c.username }}</span>
-            <span class="comment-userid">{{ c.userid }}</span>
+            <span class="comment-userid">on page{{ c.pagenum }}</span>
             <!-- タイムスタンプをTwitter風にユーザーIDの後ろに表示 -->
             <span class="comment-timestamp">・{{ formatTimestamp(c.timestamp) }}</span>
           </div>
@@ -26,7 +32,6 @@
           <div class="comment-actions">
             <span class="reply-link" @click="toggleReplyForm(index)">返信</span>
           </div>
-
           <div v-if="c.showReplyForm" class="reply-form">
             <textarea
               v-model="c.replyText"
@@ -35,7 +40,7 @@
               rows="1"
               @input="adjustReplyHeight"
             ></textarea>
-            <button @click="postReply(index)" class="reply-submit">Post</button>
+            <button @click="postReply(index)" class="reply-submit">Reply</button>
           </div>
 
           <div v-if="c.replies && c.replies.length > 0" class="replies">
@@ -63,6 +68,7 @@ import { ref, onMounted } from 'vue';
 import axios from "axios";
 
 const props = defineProps({
+  pageId: Number,
   username: {
     type: String,
     default: '匿名ユーザー'
@@ -71,7 +77,10 @@ const props = defineProps({
 
 const comment = ref('');
 const currentComments = ref([]);
-const baseURL = 'http://127.0.0.1:8888';
+const baseURL = 'https://ibera.cps.akita-pu.ac.jp/api';
+//const baseURL = 'https://127.0.0.1:8888';
+const isModified = ref(true);
+
 
 // 日時フォーマット関数（日本時間）
 const formatTimestamp = (isoString) => {
@@ -83,29 +92,40 @@ const formatTimestamp = (isoString) => {
     hour: '2-digit', 
     minute: '2-digit',
     hour12: false,
-    timeZone: 'Asia/Tokyo'  // 日本時間に設定
+    timeZone: 'Asia/Tokyo',  // 日本時間に設定
   };
   return new Intl.DateTimeFormat('ja-JP', options).format(date).replace(/\//g, '/').replace(',', '');
 };
+
 
 const postComment = async () => {
   if (comment.value.trim()) {
     try {
       const payload = {
-        page: 1,  // 必要に応じて変更
+        page: props.pageId + 1,
         user: props.username, 
         user_comment: comment.value
       };
-      const response = await axios.post(`${baseURL}/comments`, payload);
       
+      // isModified.value に応じてURLを決定
+      const url = isModified.value 
+        ? `${baseURL}/comments` 
+        : `${baseURL}/nonModifiedComments`;
+
+      // 決定したURLに対してPOSTリクエストを送信
+      const response = await axios.post(url, payload);
+      
+      // コメント入力欄をリセット
       comment.value = '';
       adjustHeight();
 
+      // 新しいコメントを作成
       const newComment = {
         ...response.data.comment,
         showReplyForm: false,
         replyText: ''
       };
+      
       // 最新コメントを上に表示
       currentComments.value.unshift(newComment);
     } catch (error) {
@@ -115,16 +135,33 @@ const postComment = async () => {
   }
 };
 
+
+const toggleIsModified = () => {
+  isModified.value = !isModified.value;
+  loadComments();
+};
+
 const loadComments = async () => {
+  console.log("開始");
   try {
-    const response = await axios.get(`${baseURL}/comments`);
+    
+    // isModified.value に応じてURLを決定
+    const url = isModified.value 
+      ? `${baseURL}/comments` 
+      : `${baseURL}/nonModifiedComments`;
+
+    // 決定したURLに対してGETリクエストを送信
+    const response = await axios.get(url);
+    console.log("response:", response); // レスポンスの確認
+
+    // 取得したデータを加工して currentComments にセット
     currentComments.value = response.data
       .map(c => ({
         ...c,
         showReplyForm: false,
         replyText: ''
       }))
-      .reverse();  // 最新を上に表示
+      .reverse();  // 最新のコメントを上に表示
   } catch (error) {
     console.error('コメント取得エラー:', error);
     alert('コメントの取得に失敗しました。');
@@ -133,7 +170,21 @@ const loadComments = async () => {
 
 onMounted(() => {
   loadComments();
+  //const socket = new WebSocket("ws://ibera.cps.akita-pu.ac.jp/api/reload_ws");
 });
+
+// // WebSocket接続が開いたら、メッセージを送信
+// socket.addEventListener("open", () => {
+//   socket.send("Hello Server!"); // テキストデータを送信
+//   socket.send(JSON.stringify({ action: "reload", page: 1 })); // JSONデータを送信
+// });
+
+// // サーバーからメッセージを受信
+// socket.addEventListener("message", (event) => {
+//   console.log("Message from server:", event.data);
+//   window.location.reload();
+// });
+
 
 // テキストエリアの高さ自動調整
 const adjustHeight = () => {
@@ -165,7 +216,12 @@ const postReply = async (commentIndex) => {
         reply_user: props.username,
         reply_user_comment: targetComment.replyText
       };
-      const response = await axios.post(`${baseURL}/replies`, payload);
+
+      const url = isModified.value 
+        ? `${baseURL}/replies` 
+        : `${baseURL}/nonModifiedReplies`;
+      
+      const response = await axios.post(url, payload);
 
       targetComment.showReplyForm = false;
       targetComment.replyText = '';
@@ -222,17 +278,31 @@ const adjustReplyHeight = (event) => {
 }
 
 .comment-button {
-  padding: 8px 16px;
-  background: #1DA1F2;
+  padding: 8px 16px; /* 少し大きくして、押しやすく */
+  background: #1DA1F2; /* 元の青色 */
   color: white;
   border: none;
-  border-radius: 20px;
-  cursor: pointer;
+  border-radius: 25px; /* より丸みを強調 */
   font-weight: bold;
-  margin-bottom: 20px;
+  font-size: 16px; /* 少しフォントサイズを大きく */
+  cursor: pointer;
+  transition: all 0.3s ease; /* スムーズなトランジション */
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* 軽い影を追加 */
 }
+
 .comment-button:hover {
-  background: #1480ba;
+  background: #1480ba; /* ホバー時に少し暗い青 */
+  box-shadow: 0 6px 10px rgba(0, 0, 0, 0.2); /* ホバー時に影を強調 */
+}
+
+.comment-button:focus {
+  outline: none; /* フォーカス時のアウトラインを削除 */
+}
+
+.comment-button:disabled {
+  background: #A1C6EA; /* 無効時にグレー調 */
+  cursor: not-allowed; /* クリック不可 */
+  box-shadow: none; /* 影を削除 */
 }
 
 .comment-list {
@@ -274,6 +344,10 @@ const adjustReplyHeight = (event) => {
 }
 
 .comment-userid {
+  margin-right: 5px;
+}
+
+.comment-pagenum{
   margin-right: 5px;
 }
 
@@ -384,5 +458,24 @@ const adjustReplyHeight = (event) => {
   white-space: pre-wrap;
   word-break: break-word;
 }
-</style>
 
+.toggle-button {
+  padding: 12px 24px; /* 余白を増やしてボタンを大きく */
+  background-color: #1DA1F2;
+  color: white;
+  border: none;
+  border-radius: 20px;
+  font-weight: bold;
+  font-size: 1.2em; /* 文字サイズを少し大きく */
+  cursor: pointer;
+  position: fixed; /* スクロールに合わせて固定 */
+  top: 20px; /* 投稿文章入力欄の上部から20pxの位置 */
+  left: 20px; /* 投稿欄の左側から20pxの位置 */
+  z-index: 1000; /* 他の要素の上に表示 */
+}
+
+.toggle-button:hover {
+  background-color: #1480ba;
+}
+
+</style>

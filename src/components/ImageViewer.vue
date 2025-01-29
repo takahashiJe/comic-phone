@@ -47,6 +47,7 @@
 
     <!-- 右カラム（サムネイルリスト） -->
     <div class="thumbnail-list-container">
+      <button @click="logoutbutton" class="logout-button">ログアウト</button>
       <p class="thumbnail-title">ページ一覧</p>
       <div class="thumbnail-list">
         <div
@@ -77,10 +78,7 @@ import Hammer from 'hammerjs';
 
 // プロパティの定義
 const props = defineProps({
-  pages: {
-    type: Array,
-    required: true
-  },
+  pages: Array,
   username: {
     type: String,
     required: true
@@ -118,34 +116,23 @@ const prevPage = () => {
   }
 };
 
-// 特定のページへ移動する関数
-const goToPage = (index) => {
-  currentIndex.value = index;
-};
-
-// コメントをロードする関数
-const loadComments = async (pageId) => {
-  try {
-    const response = await axios.get(`http://localhost:8888/comments`);
-    // フィルタリングして現在のページのコメントを取得
-    const pageComments = response.data.filter(c => c.pageId === pageId);
-    currentComments.value = pageComments
-      .map(c => ({
-        ...c,
-        showReplyForm: false,
-        replyText: '',
-        replyInputRefs: null, // 返信入力用のref
-      }))
-      .reverse();  // 最新を上に表示
-  } catch (error) {
-    console.error('コメント取得エラー:', error);
-    alert('コメントの取得に失敗しました。');
+const handleKeydown = (event) => {
+  // 左矢印キーが押された時
+  if (event.key === 'ArrowLeft') {
+    nextPage();
+  }else if (event.key === 'ArrowRight'){
+    prevPage();
   }
 };
 
-// 初期ロード時にコメントをロード
-const loadInitialComments = async () => {
-  await loadComments(currentIndex.value);
+const logoutbutton = () => {
+  localStorage.setItem('isLoggedIn', false);
+  window.location.reload();
+}
+
+// 特定のページへ移動する関数
+const goToPage = (index) => {
+  currentIndex.value = index;
 };
 
 // スワイプジェスチャーを初期化
@@ -189,14 +176,14 @@ const handleWheel = (event) => {
 };
 
 // ページが変更されたらコメントをロード
-watch(currentIndex, async (newIndex) => {
-  await loadComments(newIndex);
-});
+// watch(currentIndex, async (newIndex) => {
+//   await loadComments(newIndex);
+// });
 
 // コンポーネントのマウント時
 onMounted(() => {
-  loadInitialComments();
   initializeHammer();
+  window.addEventListener('keydown', handleKeydown);
 
   // ホイールイベントのリスナーを追加
   if (mainContentRef.value) {
@@ -229,7 +216,7 @@ onBeforeUnmount(() => {
 .main-content {
   display: flex;
   flex-direction: column;
-  width: 65%;
+  width: 100%;
   margin-right: 20px;
   overflow: hidden; /* コメントが増えてもメインコンテンツが押し出されないように */
   flex-grow: 1; /* メインコンテンツが可変で他の要素が押し出されないようにする */
@@ -241,7 +228,7 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: center; /* 画像を中央に配置 */
   align-items: center;
-  height: 80vh; /* 画像表示エリアの高さを設定 */
+  height: 90vh; /* 画像表示エリアの高さを設定 */
   overflow: hidden;
   position: relative; /* 画像の位置を調整するため */
 }
@@ -249,32 +236,35 @@ onBeforeUnmount(() => {
 /* ナビゲーションボタンの共通スタイル */
 .navigation-button {
   position: absolute;
-  top: 50%; /* ボタンを上下中央に配置 */
+  top: 50%; /* 上下中央に配置 */
   transform: translateY(-50%);
-  width: 10%; /* ボタンの幅を調整 */
+  width: 40%; /* ボタンの幅を調整 */
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.3); /* 透明度0.3の黒 */
+  background-color: rgba(0, 0, 0, 0); /* 初期状態は完全透明 */
   color: white;
   border: none;
   font-size: 1em;
-  display: flex; /* ボタン内のコンテンツを中央に配置 */
+  display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
   cursor: pointer;
-  z-index: 10; /* ボタンが画像の上に表示されるように */
+  z-index: 10;
   border-radius: 5px;
-  transition: background 0.3s;
+  transition: background 0.3s, opacity 0.3s; /* 背景と透明度を滑らかに変更 */
+  opacity: 0; /* 初期状態は透明 */
 }
 
 .navigation-button:hover {
-  background-color: rgba(0, 0, 0, 0.5); /* ホバー時の透明度を0.5に */
+  background-color: rgba(0, 0, 0, 0.5); /* ホバー時に背景色を濃く */
+  opacity: 1; /* 完全に表示 */
 }
 
 .navigation-button:disabled {
   background-color: rgba(0, 0, 0, 0.1); /* 非アクティブ時の色 */
   cursor: not-allowed;
 }
+
 
 /* 次のページボタン（左側） */
 .next-button {
@@ -413,4 +403,19 @@ onBeforeUnmount(() => {
     width: 30%;
   }
 }
+
+.logout-button {
+  padding: 8px 8px; /* 余白を増やしてボタンを大きく */
+  background-color: #808080;
+  color: white;
+  border: none;
+  border-radius: 20px;
+  font-weight: bold;
+  font-size: 1.0em; /* 文字サイズを少し大きく */
+  cursor: pointer;
+  top: 20px; /* 上から20px */
+  right: 20px; /* 右から20px */
+  z-index: 1000; /* 他の要素の上に表示 */
+}
+
 </style>
